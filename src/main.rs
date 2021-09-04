@@ -303,7 +303,7 @@ fn respond_to_message(authored_message: AuthoredMessage) -> Option<Message> {
             chrono::offset::Utc::now()
         );
 
-        let (_, _code) = bucket.put_object_blocking(filename.clone(), &shot).unwrap();
+        let (_, _code) = bucket.put_object_with_content_type_blocking(filename.clone(), &shot, "image/png").unwrap();
 
         let file_location: String = format!(
             "https://{}.s3.{}.amazonaws.com/{}",
