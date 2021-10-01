@@ -17,13 +17,13 @@ use std::{thread, time};
 
 struct Timeframe {
     parsable_phrases: Vec<String>,
-    parsed: String,
+    parsed: String
 }
 
 fn build_timeframe(parsable_phrases: Vec<String>, parsed: String) -> Timeframe {
     Timeframe {
         parsable_phrases: parsable_phrases,
-        parsed: parsed,
+        parsed: parsed
     }
 }
 
@@ -226,7 +226,7 @@ fn parse_timeframe(phrase: String) -> String {
                 "annually".to_string(),
             ],
             "Y".to_string(),
-        ),
+        )
     ];
 
     for tf in timeframes {
@@ -277,8 +277,8 @@ fn setup_s3_bucket() -> Bucket {
 fn respond_to_message(authored_message: AuthoredMessage) -> Option<Message> {
     dotenv().ok();
 
-    let width: u16 = "1024".parse().unwrap();
-    let height: u16 = "800".parse().unwrap();
+    let width: u16 = "512".parse().unwrap();
+    let height: u16 = "400".parse().unwrap();
     let bucket_name: &String = &env::var("S3_BUCKET").unwrap();
     let region: &String = &env::var("S3_REGION").unwrap();
 
@@ -291,9 +291,7 @@ fn respond_to_message(authored_message: AuthoredMessage) -> Option<Message> {
     if words[0] == "c" {
         let timeframe: String = parse_timeframe(words[2].to_string());
         let url: String = format!("https://www.tradingview.com/widgetembed/?symbol=BINANCE:{}&interval={}&theme=dark&style=1&hidetoptoolbar=1&symboledit=1&saveimage=1&withdateranges=1", words[1], timeframe);
-
         let shot: Vec<u8> = screenshot_tab(&url, width, height).ok()?;
-
         let bucket: Bucket = setup_s3_bucket();
 
         let filename: String = format!(
