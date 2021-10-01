@@ -277,8 +277,8 @@ fn setup_s3_bucket() -> Bucket {
 fn respond_to_message(authored_message: AuthoredMessage) -> Option<Message> {
     dotenv().ok();
 
-    let width: u16 = "512".parse().unwrap();
-    let height: u16 = "400".parse().unwrap();
+    let width: u16 = "1024".parse().unwrap();
+    let height: u16 = "800".parse().unwrap();
     let bucket_name: &String = &env::var("S3_BUCKET").unwrap();
     let region: &String = &env::var("S3_REGION").unwrap();
 
@@ -290,7 +290,7 @@ fn respond_to_message(authored_message: AuthoredMessage) -> Option<Message> {
 
     if words[0] == "c" {
         let timeframe: String = parse_timeframe(words[2].to_string());
-        let url: String = format!("https://www.tradingview.com/widgetembed/?symbol=BINANCE:{}&interval={}&theme=dark&style=1&hidetoptoolbar=1&symboledit=1&saveimage=1&withdateranges=1", words[1], timeframe);
+        let url: String = format!("https://www.tradingview.com/widgetembed/?symbol={}&interval={}&theme=dark&style=1&hidetoptoolbar=1&symboledit=1&saveimage=1&withdateranges=1", words[1], timeframe);
         let shot: Vec<u8> = screenshot_tab(&url, width, height).ok()?;
         let bucket: Bucket = setup_s3_bucket();
 
@@ -315,6 +315,6 @@ fn respond_to_message(authored_message: AuthoredMessage) -> Option<Message> {
 }
 
 fn main() {
-    Chatbot::new_with_local_config(respond_to_message, "~ristyc-ridwyx", "bot-testing-lab-7962")
+    Chatbot::new_with_local_config(respond_to_message, "~mitten-dapper", "main-1161")
         .run();
 }
