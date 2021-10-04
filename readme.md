@@ -18,8 +18,7 @@ Similar to Alpha bot on Discord, you can write `c <symbol> <timeframe>` and get 
 
 ## TODO
 
-[ ] Non crypto exchanges
-[ ] Non 
+[x] Non crypto exchanges
 [ ] Improve the TradingView screenshot format (dimensions, zoom) to better fit the chat UI
 [x] open image without prompting download
 [ ] Clean up the code
@@ -30,7 +29,6 @@ Similar to Alpha bot on Discord, you can write `c <symbol> <timeframe>` and get 
 [ ] helpful errors
 
 conceptual
-[ ] 3 tyes of customers
 [ ] Figure out cloud hosting
 [ ] Figure out S3 costs (maybe automatic cleanup of images older than 1 month?)
 [ ] Figure out a proper roadmap
@@ -39,35 +37,3 @@ conceptual
 Bug
 [ ] c btcusd 1mo: doens't show enough history (binance)
 
-
-@mikeosborne could you add the following to the milestones section?
-
-=================
-
-Milestone 1: Bot prototype + Moon deployment
-Details: 
-- Create chatbot that responds to incoming messages in the format of "c {ticker} {time interval}" and return a chart image with relevant financial data.
-- The bot should fetch data for any asset supported by TradingView API, such as stocks, crypto, forex, or metals.
-- Deploy this prototype bot to a Moon.
-Estimated Completion: Done
-
-Milestone 2: Ensure customers can add Cypher bot to their chats with ease.
-Details: 
-- Modify the chatbot framework we're using so that our Moon reacts when it is added to a new chat. When added, the bot displays a welcome message + menu.
-- Add "c help" command for a full list of the bot's features
-- Ensure improper inputs like "c nonexistentTicker" returns a helpful error message.
-Estimated completion: 1 week
-
-Milestone 3: Add tests
-Details: Add unit tests for command parsing, AWS, and image rendering logic.
-Estimated completion: 1 week
-
-==============
-
-The following might be out of this contract's scope.
-
-Milestone 4: Add paid tier to pay for S3 bucket
-Details: 
-- Allow bot to accept payment to the Moon it is hosted on to pay for upgraded features.
-- Create chat interface so users of our bot can upgrade or downgrade seamlessly.
-Estimated completion: 2 weeks
