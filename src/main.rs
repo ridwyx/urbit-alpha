@@ -17,13 +17,13 @@ use std::{thread, time};
 
 struct Timeframe {
     parsable_phrases: Vec<String>,
-    parsed: String
+    parsed: String,
 }
 
 fn build_timeframe(parsable_phrases: Vec<String>, parsed: String) -> Timeframe {
     Timeframe {
         parsable_phrases: parsable_phrases,
-        parsed: parsed
+        parsed: parsed,
     }
 }
 
@@ -226,7 +226,7 @@ fn parse_timeframe(phrase: String) -> String {
                 "annually".to_string(),
             ],
             "Y".to_string(),
-        )
+        ),
     ];
 
     for tf in timeframes {
@@ -253,6 +253,14 @@ fn screenshot_tab(url: &str, width: u16, height: u16) -> Result<Vec<u8>, failure
     tab.wait_for_element(".chart-gui-wrapper > canvas")?;
 
     let sleep_time = time::Duration::from_millis(2000);
+
+    println!(
+        "{:?}",
+        tab.find_element("[data-name^='time-zone-menu']")?
+            .get_description()?
+            .children
+    );
+
     thread::sleep(sleep_time);
 
     return Ok(tab.capture_screenshot(ScreenshotFormat::PNG, None, true)?);
@@ -283,8 +291,18 @@ fn respond_to_message(authored_message: AuthoredMessage) -> Option<Message> {
     let region: &String = &env::var("S3_REGION").unwrap();
 
     let words = authored_message.contents.to_formatted_words();
+
     // Error check to ensure sufficient number of words to check for command
     if words.len() <= 2 {
+        if words[0] == "c" {
+            return Some(Message::new().add_text(
+                "Unknown commad.\n
+                Type `c <trading_pair> <timeframe>` to get the corresponding chart.\n
+                You can look up any trading pair supported by TradingView.\n
+                Example: `c ethusd 4h`",
+            ));
+        }
+
         return None;
     }
 
@@ -301,7 +319,9 @@ fn respond_to_message(authored_message: AuthoredMessage) -> Option<Message> {
             chrono::offset::Utc::now()
         );
 
-        let (_, _code) = bucket.put_object_with_content_type_blocking(filename.clone(), &shot, "image/png").unwrap();
+        let (_, _code) = bucket
+            .put_object_with_content_type_blocking(filename.clone(), &shot, "image/png")
+            .unwrap();
 
         let file_location: String = format!(
             "https://{}.s3.{}.amazonaws.com/{}",
@@ -315,6 +335,6 @@ fn respond_to_message(authored_message: AuthoredMessage) -> Option<Message> {
 }
 
 fn main() {
-    Chatbot::new_with_local_config(respond_to_message, "~mitten-dapper", "main-1161")
+    Chatbot::new_with_local_config(respond_to_message, "~ristyc-ridwyx", "bot-testing-lab-7962")
         .run();
 }
