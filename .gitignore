@@ -2,3 +2,4 @@
 .env
 ship_config.yaml
 .vscode
+.DS_Store

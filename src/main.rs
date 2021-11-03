@@ -1,19 +1,23 @@
 extern crate s3;
 
+use bot::ShipChat;
 use dotenv::dotenv;
 use headless_chrome::{
     protocol::{page::ScreenshotFormat, target::methods::CreateTarget},
     Browser,
 };
 use std::env;
-use urbit_chatbot_framework::{AuthoredMessage, Chatbot, Message};
+// use urbit_chatbot_framework::{AuthoredMessage, Chatbot, Message};
 
 use s3::bucket::Bucket;
 use s3::creds::Credentials;
 use s3::region::Region;
 
+use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 use chrono;
 use std::{thread, time};
+
+mod bot;
 
 struct Timeframe {
     parsable_phrases: Vec<String>,
@@ -254,12 +258,12 @@ fn screenshot_tab(url: &str, width: u16, height: u16) -> Result<Vec<u8>, failure
 
     let sleep_time = time::Duration::from_millis(2000);
 
-    println!(
-        "{:?}",
-        tab.find_element("[data-name^='time-zone-menu']")?
-            .get_description()?
-            .children
-    );
+    // println!(
+    //     "{:?}",
+    //     tab.find_element("[data-name^='time-zone-menu']")?
+    //         .get_description()?
+    //         .children
+    // );
 
     thread::sleep(sleep_time);
 
@@ -282,7 +286,7 @@ fn setup_s3_bucket() -> Bucket {
     Bucket::new(&env::var("S3_BUCKET").unwrap(), region, credentials).unwrap()
 }
 
-fn respond_to_message(authored_message: AuthoredMessage) -> Option<Message> {
+fn respond_to_message(authored_message: bot::AuthoredMessage) -> Option<bot::Message> {
     dotenv().ok();
 
     let width: u16 = "1024".parse().unwrap();
@@ -295,7 +299,7 @@ fn respond_to_message(authored_message: AuthoredMessage) -> Option<Message> {
     // Error check to ensure sufficient number of words to check for command
     if words.len() <= 2 {
         if words[0] == "c" {
-            return Some(Message::new().add_text(
+            return Some(bot::Message::new().add_text(
                 "Unknown commad.\n
                 Type `c <trading_pair> <timeframe>` to get the corresponding chart.\n
                 You can look up any trading pair supported by TradingView.\n
@@ -328,13 +332,24 @@ fn respond_to_message(authored_message: AuthoredMessage) -> Option<Message> {
             bucket_name, region, filename
         );
 
-        return Some(Message::new().add_url(file_location.as_str()));
+        return Some(bot::Message::new().add_url(file_location.as_str()));
     }
 
     None
 }
 
 fn main() {
-    Chatbot::new_with_local_config(respond_to_message, "~ristyc-ridwyx", "bot-testing-lab-7962")
-        .run();
+    let mut shipchats: Vec<ShipChat> = Vec::new();
+    let shipchat_a = ShipChat {
+        ship_name: String::from("~ristyc-ridwyx"),
+        chat_name: String::from("bot-testing-lab-7962"),
+    };
+    let shipchat_b = ShipChat {
+        ship_name: String::from("~ristyc-ridwyx"),
+        chat_name: String::from("lab-2-9245"),
+    };
+    shipchats.push(shipchat_b);
+    shipchats.push(shipchat_a);
+
+    bot::Chatbot::new_with_local_config(respond_to_message, shipchats).run();
 }
