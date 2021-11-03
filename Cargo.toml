@@ -11,7 +11,5 @@ dotenv = "0.15.0"
 rust-s3 = "0.26.4"
 failure = "^0.1.8"
 chrono = "0.4"
-actix-web = "3"
-tokio = { version = "1", features = ["full"] }
-urbit-http-api          = {version = "0.7.2"}
+urbit-http-api          = {version = "0.7.3"}
 json                    = "0.12.4"

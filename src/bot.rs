@@ -121,16 +121,16 @@ impl Chatbot {
                 }
             }
 
-            for ship_chat in &self.ship_chats {
-                // TODO: If not subscribed, subscribe - this doesn't work yet - maybe Landscape update needed?
-                let chat_receiver = channel
-                    .chat()
-                    .subscribe_to_chat(&ship_chat.ship_name, &ship_chat.chat_name);
+            // for ship_chat in &self.ship_chats {
+            //     // TODO: If not subscribed, subscribe - this doesn't work yet - maybe Landscape update needed?
+            //     let chat_receiver = channel
+            //         .chat()
+            //         .subscribe_to_chat(&ship_chat.ship_name, &ship_chat.chat_name);
 
-                if let Ok(rec) = &chat_receiver {
-                    println!("{:?}", rec);
-                }
-            }
+            //     if let Ok(rec) = &chat_receiver {
+            //         // println!("{:#?}", rec);
+            //     }
+            // }
 
             // Send each response message that was returned by the `respond_to_message`
             // function. This is separated until after done parsing messages due to mutable borrows.
