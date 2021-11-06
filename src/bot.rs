@@ -64,6 +64,10 @@ impl Chatbot {
             .create_new_subscription("graph-store", "/updates")
             .ok()?;
 
+        channel
+            .create_new_subscription("hark-store", "/updates")
+            .ok()?;
+
         // Infinitely watch for new graph store updates
         loop {
             channel.parse_event_messages();
@@ -78,6 +82,8 @@ impl Chatbot {
                 if let Some(mess) = &pop_res {
                     // Parse it to json
                     if let Ok(json) = json::parse(mess) {
+                        // println!("{:?}", &json);
+
                         // If the graph-store node update is not for the chat the `Chatbot`
                         // is watching, then continue to next message.
                         if !self.check_resource_json(&json) {

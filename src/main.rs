@@ -2,6 +2,7 @@ extern crate s3;
 
 use bot::ShipChat;
 use dotenv::dotenv;
+use failure::Fail;
 use headless_chrome::{
     protocol::{page::ScreenshotFormat, target::methods::CreateTarget},
     Browser,
@@ -253,19 +254,27 @@ fn screenshot_tab(url: &str, width: u16, height: u16) -> Result<Vec<u8>, failure
     tab.wait_until_navigated()?;
 
     tab.wait_for_element(".chart-gui-wrapper > canvas")?;
+    let legend = tab.wait_for_element("[data-name='legend-series-item']")?;
 
     let sleep_time = time::Duration::from_millis(2000);
-
-    // println!(
-    //     "{:?}",
-    //     tab.find_element("[data-name^='time-zone-menu']")?
-    //         .get_description()?
-    //         .children
-    // );
-
     thread::sleep(sleep_time);
 
-    return Ok(tab.capture_screenshot(ScreenshotFormat::PNG, None, true)?);
+    let is_available = legend
+        .call_js_fn(
+            r#"
+        function containsNA () {
+            return !this.innerText.includes("n/a");
+        }
+    "#,
+            false,
+        )
+        .unwrap()
+        .value;
+
+    match is_available.eq(&Some(serde_json::value::Value::Bool(true))) {
+        true => Ok(tab.capture_screenshot(ScreenshotFormat::PNG, None, true)?),
+        false => Err(failure::err_msg("Trading pair not available")),
+    }
 }
 
 fn setup_s3_bucket() -> Bucket {
@@ -300,7 +309,7 @@ fn respond_to_message(authored_message: bot::AuthoredMessage) -> Option<bot::Mes
             return Some(bot::Message::new().add_text(
                 "Unknown commad.\n
                 Type `c <trading_pair> <timeframe>` to get the corresponding chart.\n
-                You can look up any trading pair supported by TradingView.\n
+                You can look up any trading pair and timeframe supported by TradingView.\n
                 Example: `c ethusd 4h`",
             ));
         }
@@ -311,26 +320,35 @@ fn respond_to_message(authored_message: bot::AuthoredMessage) -> Option<bot::Mes
     if words[0] == "c" {
         let timeframe: String = parse_timeframe(words[2].to_string());
         let url: String = format!("https://www.tradingview.com/widgetembed/?symbol={}&interval={}&theme=dark&style=1&hidetoptoolbar=1&symboledit=1&saveimage=1&withdateranges=1", words[1], timeframe);
-        let shot: Vec<u8> = screenshot_tab(&url, width, height).ok()?;
-        let bucket: Bucket = setup_s3_bucket();
+        let shot = screenshot_tab(&url, width, height);
 
-        let filename: String = format!(
-            "{}_{}_{:?}.png",
-            words[1],
-            parse_timeframe(timeframe),
-            chrono::offset::Utc::now()
-        );
+        match shot {
+            Ok(n) => {
+                let bucket: Bucket = setup_s3_bucket();
 
-        let (_, _code) = bucket
-            .put_object_with_content_type_blocking(filename.clone(), &shot, "image/png")
-            .unwrap();
+                let filename: String = format!(
+                    "{}_{}_{:?}.png",
+                    words[1],
+                    parse_timeframe(timeframe),
+                    chrono::offset::Utc::now()
+                );
 
-        let file_location: String = format!(
-            "https://{}.s3.{}.amazonaws.com/{}",
-            bucket_name, region, filename
-        );
+                let (_, _code) = bucket
+                    .put_object_with_content_type_blocking(filename.clone(), &n, "image/png")
+                    .unwrap();
 
-        return Some(bot::Message::new().add_url(file_location.as_str()));
+                let file_location: String = format!(
+                    "https://{}.s3.{}.amazonaws.com/{}",
+                    bucket_name, region, filename
+                );
+
+                return Some(bot::Message::new().add_url(file_location.as_str()));
+            }
+            Err(err) => {
+                let message = format!("Trading pair `{:?}` not available.", words[1]);
+                return Some(bot::Message::new().add_text(&message));
+            }
+        }
     }
 
     None
