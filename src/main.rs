@@ -344,7 +344,7 @@ fn respond_to_message(authored_message: bot::AuthoredMessage) -> Option<bot::Mes
 
                 return Some(bot::Message::new().add_url(file_location.as_str()));
             }
-            Err(err) => {
+            Err(_err) => {
                 let message = format!("Trading pair `{:?}` not available.", words[1]);
                 return Some(bot::Message::new().add_text(&message));
             }

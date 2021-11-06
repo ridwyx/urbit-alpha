@@ -18,22 +18,24 @@ Similar to Alpha bot on Discord, you can write `c <symbol> <timeframe>` and get 
 
 ## TODO
 
+Current phase
 [x] Non crypto exchanges
+[x] Open image without prompting download
+[x] Spawn chatbots in any chat
+[x] Help menu
+[x] Helpful errors
+[ ] Add welcome message (this means listening for invites to groups & joining channels)
+
+Next phase
 [ ] Improve the TradingView screenshot format (dimensions, zoom) to better fit the chat UI
-[x] open image without prompting download
 [ ] Clean up the code
 [ ] Add tests (?)
-[ ] Spawn chatbots in any chat. What is the setup process?
-[ ] Help menu
-[ ] accept payments
-[ ] helpful errors
+[ ] Accept payments
 
-conceptual
+Conceptual
 [ ] Figure out cloud hosting
 [ ] Figure out S3 costs (maybe automatic cleanup of images older than 1 month?)
 [ ] Figure out a proper roadmap
 
-
-Bug
+Bugs
 [ ] c btcusd 1mo: doens't show enough history (binance)
-
