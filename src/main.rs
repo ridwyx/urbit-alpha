@@ -2,7 +2,6 @@ extern crate s3;
 
 use bot::ShipChat;
 use dotenv::dotenv;
-use failure::Fail;
 use headless_chrome::{
     protocol::{page::ScreenshotFormat, target::methods::CreateTarget},
     Browser,
@@ -355,6 +354,7 @@ fn respond_to_message(authored_message: bot::AuthoredMessage) -> Option<bot::Mes
 }
 
 fn main() {
+    // Not used at this time, but ready to be used for Milestone 2
     let mut shipchats: Vec<ShipChat> = Vec::new();
     let shipchat_a = ShipChat {
         ship_name: String::from("~ristyc-ridwyx"),

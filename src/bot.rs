@@ -1,4 +1,5 @@
 use json::JsonValue;
+use serde_json::Value;
 use std::thread;
 use std::time::Duration;
 use urbit_http_api::{default_cli_ship_interface_setup, Node, NodeContents, ShipInterface};
@@ -59,30 +60,76 @@ impl Chatbot {
         println!("=======================================\nChatbot Powered By The Urbit Chatbot Framework\n=======================================");
         // Create a `Subscription`
         let channel = &mut self.ship.create_channel().ok()?;
+        let metadata_channel = &mut self.ship.create_channel().ok()?;
+
         // Subscribe to all graph-store updates
         channel
             .create_new_subscription("graph-store", "/updates")
             .ok()?;
 
-        channel
-            .create_new_subscription("hark-store", "/updates")
+        metadata_channel
+            .create_new_subscription("metadata-store", "/all")
             .ok()?;
 
         // Infinitely watch for new graph store updates
         loop {
             channel.parse_event_messages();
-            let graph_updates = &mut channel.find_subscription("graph-store", "/updates")?;
+            metadata_channel.parse_event_messages();
+
             let mut messages_to_send = vec![];
+            let mut chats_to_join: Vec<ShipChat> = Vec::new();
+
+            let graph_updates = &mut channel.find_subscription("graph-store", "/updates")?;
+            let metadata_updates =
+                &mut metadata_channel.find_subscription("metadata-store", "/all")?;
 
             // Read all of the current SSE messages to find if any are for the chat
             // we are looking for.
             loop {
                 let pop_res = graph_updates.pop_message();
+                let pop_update = metadata_updates.pop_message();
+
+                if let Some(update) = &pop_update {
+                    let update_result: serde_json::Value = serde_json::from_str(update).unwrap();
+
+                    // On first run, checks for all available chats
+                    if let Some(associations_update) =
+                        update_result["metadata-update"]["associations"].as_object()
+                    {
+                        for (_, value) in associations_update {
+                            if value["app-name"] == "graph" {
+                                let chat = self.chat_id_from_resource(value);
+                                println!("In Chat: {}", chat.chat_name);
+                                chats_to_join.push(chat);
+                            }
+                        }
+                    }
+
+                    if let Some(joined_group_update) = update_result["metadata-update"]
+                        ["initial-group"]["associations"]
+                        .as_object()
+                    {
+                        for (_, value) in joined_group_update {
+                            if value["app-name"] == "graph" {
+                                let chat = self.chat_id_from_resource(value);
+                                println!("Joined Chat: {}", chat.chat_name);
+                                chats_to_join.push(chat);
+                            }
+                        }
+                    }
+
+                    if let Some(removed_from_group_update) =
+                        update_result["metadata-update"]["remove"].as_object()
+                    {
+                        println!("Removed from Chat: {:?}", removed_from_group_update);
+                    }
+                }
+
                 // Acquire the message
                 if let Some(mess) = &pop_res {
                     // Parse it to json
                     if let Ok(json) = json::parse(mess) {
-                        // println!("{:?}", &json);
+                        println!("{:?}", &json);
 
                         // If the graph-store node update is not for the chat the `Chatbot`
                         // is watching, then continue to next message.
@@ -127,16 +174,45 @@ impl Chatbot {
                 }
             }
 
-            // for ship_chat in &self.ship_chats {
-            //     // TODO: If not subscribed, subscribe - this doesn't work yet - maybe Landscape update needed?
-            //     let chat_receiver = channel
-            //         .chat()
-            //         .subscribe_to_chat(&ship_chat.ship_name, &ship_chat.chat_name);
+            // Join newly added chats
+            chats_to_join.retain(|chat| {
+                let json_string = format!(
+                    "{{\"join\":{{\"resource\":{{\"ship\":\"{ship}\",\"name\":\"{chat}\"}},\"ship\":\"{ship}\"}}}}",
+                    ship = chat.ship_name, chat = chat.chat_name
+                );
+                let spider_data = json::parse(&json_string).ok().unwrap();
+                let spider = channel.spider(
+                    "landscape",
+                    "json",
+                    "graph-view-action/graph-join",
+                    &spider_data,
+                );
 
-            //     if let Ok(rec) = &chat_receiver {
-            //         // println!("{:#?}", rec);
-            //     }
-            // }
+                thread::sleep(Duration::new(0, 500000000));
+
+                if let Ok(spider_response) = spider {
+                    println!("Actually joined chat: {:?}", spider_response);
+
+                    // Send welcome message
+                    channel
+                        .chat()
+                        .send_chat_message(
+                            &chat.ship_name,
+                            &chat.chat_name,
+                            &Message::new().add_text(
+                                "Urbit Alpha online.\n
+                                Type `c <trading_pair> <timeframe>` to get the corresponding chart.\n
+                                You can look up any trading pair and timeframe supported by TradingView.\n
+                                Example: `c ethusd 4h`",
+                            ),
+                        )
+                        .ok();
+
+                    return false; // remove from chats_to_join
+                } else {
+                    return true; // keep in chats_to_join
+                }
+            });
 
             // Send each response message that was returned by the `respond_to_message`
             // function. This is separated until after done parsing messages due to mutable borrows.
@@ -165,6 +241,21 @@ impl Chatbot {
         return ShipChat {
             ship_name: format!("~{}", resource["ship"]),
             chat_name: format!("{}", resource["name"]),
+        };
+    }
+
+    fn chat_id_from_resource(&self, value: &Value) -> ShipChat {
+        let resource = value["resource"].clone().to_string();
+        let splitted_value = resource.split("/");
+
+        let ship_id = splitted_value.clone().collect::<Vec<&str>>()[2].to_string();
+
+        let mut chat_id = splitted_value.clone().last().unwrap().to_string();
+        chat_id.pop(); // remove trailing quote
+
+        return ShipChat {
+            ship_name: ship_id,
+            chat_name: chat_id,
         };
     }
 
