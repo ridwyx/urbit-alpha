@@ -25,7 +25,7 @@ Current phase
 - [x] Spawn chatbots in any chat
 - [x] Help menu
 - [x] Helpful errors
-- [ ] Add welcome message (this means listening for invites to groups & joining channels)
+- [x] Add welcome message (this means listening for invites to groups & joining channels)
 
 Next phase
 
