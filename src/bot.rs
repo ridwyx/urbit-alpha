@@ -259,18 +259,17 @@ impl Chatbot {
         };
     }
 
-    /// Checks whether the resource json matches the chat_name & chat_ship
+    /// Checks whether the resource json matches one of the chat_name & chat_ship pairs
     /// that this `Chatbot` is interacting with
     fn check_resource_json(&self, resource_json: &JsonValue) -> bool {
-        // let resource = resource_json["graph-update"]["add-nodes"]["resource"].clone();
-        // let chat_name = format!("{}", resource["name"]);
-        // let chat_ship = format!("~{}", resource["ship"]);
-        // if chat_name == self.chat_name && chat_ship == self.chat_ship {
-        //     return true;
-        // }
-
-        // TODO: Add checking if the message is coming from one of the enabled ship/chats combos
-
-        true
+        let resource = resource_json["graph-update"]["add-nodes"]["resource"].clone();
+        let chat_name = format!("{}", resource["name"]);
+        let chat_ship = format!("~{}", resource["ship"]);
+        for ship_chat in &self.ship_chats {
+            if chat_name == ship_chat.chat_name && chat_ship == ship_chat.ship_name {
+                return true;
+            }
+        }
+        false
     }
 }
