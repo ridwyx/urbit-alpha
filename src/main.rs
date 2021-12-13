@@ -299,14 +299,16 @@ fn respond_to_message(authored_message: bot::AuthoredMessage) -> Option<bot::Mes
     let height: u16 = "800".parse().unwrap();
     let bucket_name: &String = &env::var("S3_BUCKET").unwrap();
     let region: &String = &env::var("S3_REGION").unwrap();
+    println!("Received message: {}", authored_message.contents.to_formatted_string());
 
     let words = authored_message.contents.to_formatted_words();
 
     // Error check to ensure sufficient number of words to check for command
     if words.len() <= 2 {
+        println!("Error: invalid command");
         if words[0] == "c" {
             return Some(bot::Message::new().add_text(
-                "Unknown commad.\n
+                "Unknown command.\n
                 Type `c <trading_pair> <timeframe>` to get the corresponding chart.\n
                 You can look up any trading pair and timeframe supported by TradingView.\n
                 Example: `c ethusd 4h`",
@@ -317,10 +319,11 @@ fn respond_to_message(authored_message: bot::AuthoredMessage) -> Option<bot::Mes
     }
 
     if words[0] == "c" {
+        println!("Parsing command.");
         let timeframe: String = parse_timeframe(words[2].to_string());
         let url: String = format!("https://www.tradingview.com/widgetembed/?symbol={}&interval={}&theme=dark&style=1&hidetoptoolbar=1&symboledit=1&saveimage=1&withdateranges=1", words[1], timeframe);
         let shot = screenshot_tab(&url, width, height);
-
+        println!("Got TradingView screenshot, uploading to S3.");
         match shot {
             Ok(n) => {
                 let bucket: Bucket = setup_s3_bucket();
@@ -340,6 +343,7 @@ fn respond_to_message(authored_message: bot::AuthoredMessage) -> Option<bot::Mes
                     "https://{}.s3.{}.amazonaws.com/{}",
                     bucket_name, region, filename
                 );
+                println!("Uploaded to S3. Sending URL to chat.");
 
                 return Some(bot::Message::new().add_url(file_location.as_str()));
             }
@@ -357,8 +361,8 @@ fn main() {
     // Not used at this time, but ready to be used for Milestone 2
     let mut shipchats: Vec<ShipChat> = Vec::new();
     let shipchat_a = ShipChat {
-        ship_name: String::from("~ristyc-ridwyx"),
-        chat_name: String::from("bot-testing-lab-7962"),
+        ship_name: String::from("~noslur-fabled"),
+        chat_name: String::from("chat-8841"),
     };
     let shipchat_b = ShipChat {
         ship_name: String::from("~ristyc-ridwyx"),

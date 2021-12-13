@@ -1,4 +1,4 @@
-use json::JsonValue;
+use json::{object, JsonValue};
 use serde_json::Value;
 use std::thread;
 use std::time::Duration;
@@ -60,38 +60,82 @@ impl Chatbot {
         println!("=======================================\nChatbot Powered By The Urbit Chatbot Framework\n=======================================");
         // Create a `Subscription`
         let channel = &mut self.ship.create_channel().ok()?;
-        let metadata_channel = &mut self.ship.create_channel().ok()?;
+        //let metadata_channel = &mut self.ship.create_channel().ok()?;
+
+        let invite_channel = &mut self.ship.create_channel().ok()?;
+        let poke_channel = &mut self.ship.create_channel().ok()?;
 
         // Subscribe to all graph-store updates
         channel
             .create_new_subscription("graph-store", "/updates")
             .ok()?;
-
+/* 
         metadata_channel
             .create_new_subscription("metadata-store", "/all")
+            .ok()?; */
+        invite_channel
+            .create_new_subscription("invite-store", "/updates")
             .ok()?;
 
         // Infinitely watch for new graph store updates
         loop {
             channel.parse_event_messages();
-            metadata_channel.parse_event_messages();
+            //metadata_channel.parse_event_messages();
+            invite_channel.parse_event_messages();
 
             let mut messages_to_send = vec![];
             let mut chats_to_join: Vec<ShipChat> = Vec::new();
 
             let graph_updates = &mut channel.find_subscription("graph-store", "/updates")?;
-            let metadata_updates =
-                &mut metadata_channel.find_subscription("metadata-store", "/all")?;
+            let invite_updates = &mut invite_channel.find_subscription("invite-store", "/updates")?;
+            // let metadata_updates = &mut metadata_channel.find_subscription("metadata-store", "/all")?;
+            let pop_invite = invite_updates.pop_message();
+            if let Some(invite) = &pop_invite {
+                // accept invite, join all chats
+                println!("got invite: {}", invite);
+                let invite_result = json::parse(invite).unwrap();
+                let nested = &invite_result["invite-update"]["invite"]["invite"];
+                let json_string = format!(
+                    "{{\"join\":{{\"app\": \"groups\", \"autojoin\": true, \"shareContact\": true, \"resource\":{{\"ship\":\"~{ship}\",\"name\":\"{chat}\"}},\"ship\":\"~{ship}\"}}}}",
+                    ship = nested["resource"]["ship"], chat = nested["resource"]["name"]
+                );
+                println!("json string: {}", json_string);
+                let poke_data = json::parse(&json_string).ok().unwrap();
+                let poke = poke_channel.poke(
+                    "group-view",
+                    "group-view-action",
+                    &poke_data
+                );
+                // send ack
+                let mut body = json::parse(r#"[]"#).unwrap();
+                body[0] = object! {
+                        "event-id": invite_updates.creation_id,
+                        "action": "ack"
+                };
 
+                println!("this is ack body: {:?}", body);
+        
+                // Make the put request for the poke
+                let ack = self.ship.send_put_request(&poke_channel.url, &body);
+
+                thread::sleep(Duration::new(0, 500000000));
+
+                if let Ok(poke_res) = poke {
+                    println!("accepted invite, response was {:?}", poke_res);
+                }
+                if let Ok(ack_res) = ack {
+                    println!("sent ack, response was {:?}", ack_res);
+                }
+            }
             // Read all of the current SSE messages to find if any are for the chat
             // we are looking for.
             loop {
                 let pop_res = graph_updates.pop_message();
+            /*
                 let pop_update = metadata_updates.pop_message();
 
                 if let Some(update) = &pop_update {
                     let update_result: serde_json::Value = serde_json::from_str(update).unwrap();
-
                     // On first run, checks for all available chats
                     if let Some(associations_update) =
                         update_result["metadata-update"]["associations"].as_object()
@@ -105,6 +149,7 @@ impl Chatbot {
                         }
                     }
 
+                    // what is initial-group?
                     if let Some(joined_group_update) = update_result["metadata-update"]
                         ["initial-group"]["associations"]
                         .as_object()
@@ -124,7 +169,7 @@ impl Chatbot {
                         println!("Removed from Chat: {:?}", removed_from_group_update);
                     }
                 }
-
+                */
                 // Acquire the message
                 if let Some(mess) = &pop_res {
                     // Parse it to json
@@ -133,9 +178,9 @@ impl Chatbot {
 
                         // If the graph-store node update is not for the chat the `Chatbot`
                         // is watching, then continue to next message.
-                        if !self.check_resource_json(&json) {
+/*                         if !self.check_resource_json(&json) {
                             continue;
-                        }
+                        } */
 
                         let origin_ship_chat = self.get_ship_chat_from_resource_json(&json);
 
@@ -173,7 +218,7 @@ impl Chatbot {
                     break;
                 }
             }
-
+/*
             // Join newly added chats
             chats_to_join.retain(|chat| {
                 let json_string = format!(
@@ -213,7 +258,7 @@ impl Chatbot {
                     return true; // keep in chats_to_join
                 }
             });
-
+*/
             // Send each response message that was returned by the `respond_to_message`
             // function. This is separated until after done parsing messages due to mutable borrows.
             for message in messages_to_send {
