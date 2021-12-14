@@ -2,7 +2,7 @@ use json::{object, JsonValue};
 use serde_json::Value;
 use std::thread;
 use std::time::Duration;
-use urbit_http_api::{default_cli_ship_interface_setup, Node, NodeContents, ShipInterface};
+use urbit_http_api::{default_cli_ship_interface_setup, Node, NodeContents, ShipInterface, Channel};
 pub use urbit_http_api::{AuthoredMessage, Message};
 
 pub struct ShipChat {
@@ -55,6 +55,40 @@ impl Chatbot {
         Self::new(respond_to_message, ship, ship_chats)
     }
 
+    // Accept an invite from a third party ship/chat
+    pub fn invite_accept(&self, poke_channel: &mut Channel, invite_str: &str) -> () {
+        let invite_json = json::parse(invite_str).unwrap();
+        if invite_json["invite-update"]["invite"].is_null() {
+            return;
+        }
+
+        println!("Got an invite: {}", invite_str);
+        let ship = format!("{}{}", "~", &invite_json["invite-update"]["invite"]["invite"]["resource"]["ship"].clone());
+        let name = invite_json["invite-update"]["invite"]["invite"]["resource"]["name"].clone().into();
+
+        // Construct accept invite JSON body and poke
+        let mut poke_data = JsonValue::new_object();
+        poke_data["join"] = JsonValue::new_object();
+        poke_data["join"]["resource"] = JsonValue::new_object();
+        poke_data["join"]["resource"]["ship"] = JsonValue::String(ship.clone().into());
+        poke_data["join"]["resource"]["name"] = name;
+        poke_data["join"]["ship"] = JsonValue::String(ship.clone().into());
+        poke_data["join"]["app"] = JsonValue::String("groups".to_string());
+        poke_data["join"]["autojoin"] = JsonValue::Boolean(true);
+        poke_data["join"]["shareContact"] = JsonValue::Boolean(true);
+
+        let poke = poke_channel.poke(
+            "group-view",
+            "group-view-action",
+            &poke_data
+        );
+
+        thread::sleep(Duration::new(0, 500000000));
+        if let Ok(poke_res) = poke {
+            println!("Accepted invite, response was {:?}", poke_res);
+        }
+    }
+
     /// Run the `Chatbot`
     pub fn run(&self) -> Option<()> {
         println!("=======================================\nChatbot Powered By The Urbit Chatbot Framework\n=======================================");
@@ -91,42 +125,9 @@ impl Chatbot {
             // let metadata_updates = &mut metadata_channel.find_subscription("metadata-store", "/all")?;
             let pop_invite = invite_updates.pop_message();
             if let Some(invite) = &pop_invite {
-                // accept invite, join all chats
-                println!("got invite: {}", invite);
-                let invite_result = json::parse(invite).unwrap();
-                let nested = &invite_result["invite-update"]["invite"]["invite"];
-                let json_string = format!(
-                    "{{\"join\":{{\"app\": \"groups\", \"autojoin\": true, \"shareContact\": true, \"resource\":{{\"ship\":\"~{ship}\",\"name\":\"{chat}\"}},\"ship\":\"~{ship}\"}}}}",
-                    ship = nested["resource"]["ship"], chat = nested["resource"]["name"]
-                );
-                println!("json string: {}", json_string);
-                let poke_data = json::parse(&json_string).ok().unwrap();
-                let poke = poke_channel.poke(
-                    "group-view",
-                    "group-view-action",
-                    &poke_data
-                );
-                // send ack
-                let mut body = json::parse(r#"[]"#).unwrap();
-                body[0] = object! {
-                        "event-id": invite_updates.creation_id,
-                        "action": "ack"
-                };
-
-                println!("this is ack body: {:?}", body);
-        
-                // Make the put request for the poke
-                let ack = self.ship.send_put_request(&poke_channel.url, &body);
-
-                thread::sleep(Duration::new(0, 500000000));
-
-                if let Ok(poke_res) = poke {
-                    println!("accepted invite, response was {:?}", poke_res);
-                }
-                if let Ok(ack_res) = ack {
-                    println!("sent ack, response was {:?}", ack_res);
-                }
+                self.invite_accept(poke_channel, invite);
             }
+
             // Read all of the current SSE messages to find if any are for the chat
             // we are looking for.
             loop {
