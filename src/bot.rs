@@ -101,48 +101,16 @@ impl Chatbot {
                     chats_to_join = self.get_chats_to_join(update);
                 }
 
-                // Process recent commands
+                // Process message, determine if we should reply
                 let pop_res = graph_updates.pop_message();
-                if let Some(mess) = &pop_res {
-                    // Parse it to json
-                    if let Ok(json) = json::parse(mess) {
-                        let origin_ship_chat = self.get_ship_chat_from_resource_json(&json);
-
-                        // Otherwise, parse json to a `Node`
-                        if let Ok(node) = Node::from_graph_update_json(&json) {
-                            // If the message is posted by the Chatbot ship, ignore
-                            // if node.author == self.ship.ship_name
-                            if node.author == self.ship.ship_name {
-                                continue;
-                            }
-
-                            // Else parse it as an `AuthoredMessage`
-                            let authored_message = AuthoredMessage::new(
-                                &node.author,
-                                &node.contents,
-                                &node.time_sent_formatted(),
-                                &node.index,
-                            );
-                            // If the Chatbot intends to respond to the provided message
-                            if let Some(message) = (self.respond_to_message)(authored_message) {
-                                println!("Replied to message.");
-                                // messages_to_send.push(message);
-                                messages_to_send.push(MessagePayload {
-                                    message: message,
-                                    ship_chat: origin_ship_chat,
-                                });
-                            } else {
-                                println!("Message ignored.")
-                            }
-                        }
-                    }
+                if let Some(message) = &pop_res {
+                    messages_to_send = self.get_messages_to_send(message);
                 }
                 // If no messages left, stop
                 // TODO should we only break if all three channels have no messages left?
-                if let None = &pop_res {
+                if matches!(&pop_res, None) && matches!(&pop_invite, None) && matches!(&pop_update, None) {
                     break;
                 }
-                
             }
 
             // Join newly added chats
@@ -195,6 +163,43 @@ impl Chatbot {
             }
             thread::sleep(Duration::new(0, 500000000));
         }
+    }
+
+    fn get_messages_to_send(&self, message: &str) -> Vec<MessagePayload> {
+        let mut messages_to_send = vec![];
+        // Parse it to json
+        if let Ok(json) = json::parse(message) {
+            let origin_ship_chat = self.get_ship_chat_from_resource_json(&json);
+
+            // Otherwise, parse json to a `Node`
+            if let Ok(node) = Node::from_graph_update_json(&json) {
+                // If the message is posted by the Chatbot ship, ignore
+                // if node.author == self.ship.ship_name
+                if node.author == self.ship.ship_name {
+                    return messages_to_send;
+                }
+
+                // Else parse it as an `AuthoredMessage`
+                let authored_message = AuthoredMessage::new(
+                    &node.author,
+                    &node.contents,
+                    &node.time_sent_formatted(),
+                    &node.index,
+                );
+                // If the Chatbot intends to respond to the provided message
+                if let Some(message) = (self.respond_to_message)(authored_message) {
+                    println!("Replied to message.");
+                    // messages_to_send.push(message);
+                    messages_to_send.push(MessagePayload {
+                        message: message,
+                        ship_chat: origin_ship_chat,
+                    });
+                } else {
+                    println!("Message ignored.")
+                }
+            }
+        }
+        messages_to_send
     }
    
     pub fn build_invite_accept_json(&self, ship: String, name: String) -> JsonValue {
