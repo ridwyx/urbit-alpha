@@ -54,67 +54,24 @@ impl Chatbot {
         let ship = default_cli_ship_interface_setup();
         Self::new(respond_to_message, ship, ship_chats)
     }
-
-    // Accept an invite from a third party ship/chat
-    pub fn invite_accept(&self, poke_channel: &mut Channel, invite_str: &str) -> () {
-        let invite_json = json::parse(invite_str).unwrap();
-        if invite_json["invite-update"]["invite"].is_null() {
-            return;
-        }
-
-        println!("Got an invite: {}", invite_str);
-        let ship = format!("{}{}", "~", &invite_json["invite-update"]["invite"]["invite"]["resource"]["ship"].clone());
-        let name = invite_json["invite-update"]["invite"]["invite"]["resource"]["name"].clone().into();
-
-        // Construct accept invite JSON body and poke
-        let mut poke_data = JsonValue::new_object();
-        poke_data["join"] = JsonValue::new_object();
-        poke_data["join"]["resource"] = JsonValue::new_object();
-        poke_data["join"]["resource"]["ship"] = JsonValue::String(ship.clone().into());
-        poke_data["join"]["resource"]["name"] = name;
-        poke_data["join"]["ship"] = JsonValue::String(ship.clone().into());
-        poke_data["join"]["app"] = JsonValue::String("groups".to_string());
-        poke_data["join"]["autojoin"] = JsonValue::Boolean(true);
-        poke_data["join"]["shareContact"] = JsonValue::Boolean(true);
-
-        let poke = poke_channel.poke(
-            "group-view",
-            "group-view-action",
-            &poke_data
-        );
-
-        thread::sleep(Duration::new(0, 500000000));
-        if let Ok(poke_res) = poke {
-            println!("Accepted invite, response was {:?}", poke_res);
-        }
-    }
-
+ 
     /// Run the `Chatbot`
     pub fn run(&self) -> Option<()> {
         println!("=======================================\nChatbot Powered By The Urbit Chatbot Framework\n=======================================");
         // Create a `Subscription`
         let channel = &mut self.ship.create_channel().ok()?;
-        //let metadata_channel = &mut self.ship.create_channel().ok()?;
-
+        let metadata_channel = &mut self.ship.create_channel().ok()?;
         let invite_channel = &mut self.ship.create_channel().ok()?;
         let poke_channel = &mut self.ship.create_channel().ok()?;
 
-        // Subscribe to all graph-store updates
-        channel
-            .create_new_subscription("graph-store", "/updates")
-            .ok()?;
-/* 
-        metadata_channel
-            .create_new_subscription("metadata-store", "/all")
-            .ok()?; */
-        invite_channel
-            .create_new_subscription("invite-store", "/updates")
-            .ok()?;
+        channel.create_new_subscription("graph-store", "/updates").ok()?;
+        metadata_channel.create_new_subscription("metadata-store", "/all").ok()?;
+        invite_channel.create_new_subscription("invite-store", "/updates").ok()?;
 
-        // Infinitely watch for new graph store updates
+        // Infinitely watch for new updates
         loop {
             channel.parse_event_messages();
-            //metadata_channel.parse_event_messages();
+            metadata_channel.parse_event_messages();
             invite_channel.parse_event_messages();
 
             let mut messages_to_send = vec![];
@@ -122,67 +79,33 @@ impl Chatbot {
 
             let graph_updates = &mut channel.find_subscription("graph-store", "/updates")?;
             let invite_updates = &mut invite_channel.find_subscription("invite-store", "/updates")?;
-            // let metadata_updates = &mut metadata_channel.find_subscription("metadata-store", "/all")?;
-            let pop_invite = invite_updates.pop_message();
-            if let Some(invite) = &pop_invite {
-                self.invite_accept(poke_channel, invite);
-            }
+            let metadata_updates = &mut metadata_channel.find_subscription("metadata-store", "/all")?;
 
             // Read all of the current SSE messages to find if any are for the chat
             // we are looking for.
             loop {
-                let pop_res = graph_updates.pop_message();
-            /*
-                let pop_update = metadata_updates.pop_message();
-
-                if let Some(update) = &pop_update {
-                    let update_result: serde_json::Value = serde_json::from_str(update).unwrap();
-                    // On first run, checks for all available chats
-                    if let Some(associations_update) =
-                        update_result["metadata-update"]["associations"].as_object()
-                    {
-                        for (_, value) in associations_update {
-                            if value["app-name"] == "graph" {
-                                let chat = self.chat_id_from_resource(value);
-                                println!("In Chat: {}", chat.chat_name);
-                                chats_to_join.push(chat);
-                            }
-                        }
-                    }
-
-                    // what is initial-group?
-                    if let Some(joined_group_update) = update_result["metadata-update"]
-                        ["initial-group"]["associations"]
-                        .as_object()
-                    {
-                        for (_, value) in joined_group_update {
-                            if value["app-name"] == "graph" {
-                                let chat = self.chat_id_from_resource(value);
-                                println!("Joined Chat: {}", chat.chat_name);
-                                chats_to_join.push(chat);
-                            }
-                        }
-                    }
-
-                    if let Some(removed_from_group_update) =
-                        update_result["metadata-update"]["remove"].as_object()
-                    {
-                        println!("Removed from Chat: {:?}", removed_from_group_update);
+                // Process invitations to new groups
+                let pop_invite = invite_updates.pop_message();
+                if let Some(invite) = &pop_invite {
+                    let invite_result = self.invite_accept(poke_channel, invite);
+                    match invite_result {
+                        Ok(true) => println!("Successfully accepted invite."),
+                        Ok(false) => (), // Ignore when invite-store sends a message that confirms we accepted the invite
+                        Err(e) => println!("There was an error accepting the invite: {}", e)
                     }
                 }
-                */
-                // Acquire the message
+
+                // Get any newly created chats in our groups
+                let pop_update = metadata_updates.pop_message();
+                if let Some(update) = &pop_update {
+                    chats_to_join = self.get_chats_to_join(update);
+                }
+
+                // Process recent commands
+                let pop_res = graph_updates.pop_message();
                 if let Some(mess) = &pop_res {
                     // Parse it to json
                     if let Ok(json) = json::parse(mess) {
-                        println!("{:?}", &json);
-
-                        // If the graph-store node update is not for the chat the `Chatbot`
-                        // is watching, then continue to next message.
-/*                         if !self.check_resource_json(&json) {
-                            continue;
-                        } */
-
                         let origin_ship_chat = self.get_ship_chat_from_resource_json(&json);
 
                         // Otherwise, parse json to a `Node`
@@ -215,13 +138,16 @@ impl Chatbot {
                     }
                 }
                 // If no messages left, stop
+                // TODO should we only break if all three channels have no messages left?
                 if let None = &pop_res {
                     break;
                 }
+                
             }
-/*
+
             // Join newly added chats
-            chats_to_join.retain(|chat| {
+            for chat in chats_to_join.iter() {
+                println!("Attempting to join {} {}", chat.ship_name, chat.chat_name);
                 let json_string = format!(
                     "{{\"join\":{{\"resource\":{{\"ship\":\"{ship}\",\"name\":\"{chat}\"}},\"ship\":\"{ship}\"}}}}",
                     ship = chat.ship_name, chat = chat.chat_name
@@ -233,14 +159,13 @@ impl Chatbot {
                     "graph-view-action/graph-join",
                     &spider_data,
                 );
-
                 thread::sleep(Duration::new(0, 500000000));
 
                 if let Ok(spider_response) = spider {
                     println!("Actually joined chat: {:?}", spider_response);
-
                     // Send welcome message
-                    channel
+                    // TODO move to invite_accept
+/*                     channel
                         .chat()
                         .send_chat_message(
                             &chat.ship_name,
@@ -252,14 +177,10 @@ impl Chatbot {
                                 Example: `c ethusd 4h`",
                             ),
                         )
-                        .ok();
-
-                    return false; // remove from chats_to_join
-                } else {
-                    return true; // keep in chats_to_join
+                        .ok(); */
                 }
-            });
-*/
+            }
+
             // Send each response message that was returned by the `respond_to_message`
             // function. This is separated until after done parsing messages due to mutable borrows.
             for message in messages_to_send {
@@ -275,36 +196,91 @@ impl Chatbot {
             thread::sleep(Duration::new(0, 500000000));
         }
     }
+   
+    pub fn build_invite_accept_json(&self, ship: String, name: String) -> JsonValue {
+        let mut poke_data = JsonValue::new_object();
+        poke_data["join"] = JsonValue::new_object();
+        poke_data["join"]["resource"] = JsonValue::new_object();
+        poke_data["join"]["resource"]["ship"] = JsonValue::String(format!("~{}", ship.clone()));
+        poke_data["join"]["resource"]["name"] = JsonValue::String(name.clone().into());
+        poke_data["join"]["ship"] = JsonValue::String(format!("~{}", ship.clone()));
+        poke_data["join"]["app"] = JsonValue::String("groups".to_string());
+        poke_data["join"]["autojoin"] = JsonValue::Boolean(true);
+        poke_data["join"]["shareContact"] = JsonValue::Boolean(true);
+        poke_data
+    }
+
+    // Accept an invite from a third party ship/chat
+    // Return Ok(true) if invite was accepted
+    // Return Ok(false) if we got a message from invite-store that wasn't necessarily the invite (this happens sometimes)
+    pub fn invite_accept(&self, poke_channel: &mut Channel, invite_message: &str) -> Result<bool, urbit_http_api::UrbitAPIError> {
+        let invite_message_json = json::parse(invite_message).unwrap();
+        if invite_message_json["invite-update"]["invite"].is_null() {
+            return Ok(false);
+        }
+
+        let ship = invite_message_json["invite-update"]["invite"]["invite"]["resource"]["ship"].clone().to_string();
+        let name = invite_message_json["invite-update"]["invite"]["invite"]["resource"]["name"].clone().to_string();
+        println!("Got an invite from group {} on ship {}. Raw JSON: {}", name, ship, invite_message_json);
+        let poke = poke_channel.poke(
+            "group-view",
+            "group-view-action",
+            &self.build_invite_accept_json(ship, name)
+        );
+        thread::sleep(Duration::new(0, 500000000));
+        match poke {
+            Ok(r) => Ok(true),
+            Err(e) => Err(e)
+        }
+    }
+
+    // Assembles list of chats to join.
+    pub fn get_chats_to_join(&self, metadata_update: &str) -> Vec<ShipChat> {
+        let mut chats_to_join: Vec<ShipChat> = Vec::new();
+        let update_result: serde_json::Value = serde_json::from_str(metadata_update).unwrap();
+        // Reacts when new chats are created
+        if let Some(new_chat_update) = update_result["metadata-update"]["add"].as_object() {
+            if new_chat_update["app-name"] == "graph" && new_chat_update["resource"].is_string() {
+                let chat = self.chat_id_from_resource(new_chat_update["resource"].as_str().unwrap());
+                println!("Joined Chat: {}", chat.chat_name);
+                chats_to_join.push(chat);
+            }
+        }
+        // Handles the case where new chats are created while the bot is offline.
+        // This does not scale. A later version will not attempt to rejoin chats the bot already knows about, just new ones.
+        if let Some(associations_update) = update_result["metadata-update"]["associations"].as_object() {
+            for (_, value) in associations_update {
+                if value["app-name"] == "graph" {
+                    let chat = self.chat_id_from_resource(value["resource"].as_str().unwrap());
+                    println!("In Chat: {}", chat.chat_name);
+                    chats_to_join.push(chat);
+                }
+            }
+        }
+        // TODO: remove chat from our persistent store
+        if let Some(removed_from_group_update) = update_result["metadata-update"]["remove"].as_object() {
+            println!("Removed from Chat: {:?}", removed_from_group_update);
+        }
+        chats_to_join
+    }
 
     fn get_ship_chat_from_resource_json(&self, resource_json: &JsonValue) -> ShipChat {
         let resource = resource_json["graph-update"]["add-nodes"]["resource"].clone();
-
-        println!(
-            "Processing message on ~{} {}",
-            resource["ship"], resource["name"]
-        );
-
         return ShipChat {
             ship_name: format!("~{}", resource["ship"]),
             chat_name: format!("{}", resource["name"]),
         };
     }
 
-    fn chat_id_from_resource(&self, value: &Value) -> ShipChat {
-        let resource = value["resource"].clone().to_string();
+    fn chat_id_from_resource(&self, resource: &str) -> ShipChat {
         let splitted_value = resource.split("/");
-
-        let ship_id = splitted_value.clone().collect::<Vec<&str>>()[2].to_string();
-
-        let mut chat_id = splitted_value.clone().last().unwrap().to_string();
-        chat_id.pop(); // remove trailing quote
-
         return ShipChat {
-            ship_name: ship_id,
-            chat_name: chat_id,
+            ship_name: splitted_value.clone().collect::<Vec<&str>>()[2].to_string(),
+            chat_name: splitted_value.clone().last().unwrap().to_string(),
         };
     }
 
+    /// Deprecated: Urbit Alpha responds to all commands in all chats of which it is a member.
     /// Checks whether the resource json matches one of the chat_name & chat_ship pairs
     /// that this `Chatbot` is interacting with
     fn check_resource_json(&self, resource_json: &JsonValue) -> bool {
