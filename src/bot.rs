@@ -1,5 +1,4 @@
-use json::{object, JsonValue};
-use serde_json::Value;
+use json::JsonValue;
 use std::thread;
 use std::time::Duration;
 use urbit_http_api::{default_cli_ship_interface_setup, Node, NodeContents, ShipInterface, Channel};
@@ -84,8 +83,10 @@ impl Chatbot {
             // Read all of the current SSE messages to find if any are for the chat
             // we are looking for.
             loop {
-                // Process invitations to new groups
                 let pop_invite = invite_updates.pop_message();
+                let pop_metadata = metadata_updates.pop_message();
+                let pop_message = graph_updates.pop_message();
+                // Process invitations to new groups
                 if let Some(invite) = &pop_invite {
                     let invite_result = self.invite_accept(poke_channel, invite);
                     match invite_result {
@@ -94,21 +95,17 @@ impl Chatbot {
                         Err(e) => println!("There was an error accepting the invite: {}", e)
                     }
                 }
-
                 // Get any newly created chats in our groups
-                let pop_update = metadata_updates.pop_message();
-                if let Some(update) = &pop_update {
-                    chats_to_join = self.get_chats_to_join(update);
+                if let Some(metadata) = &pop_metadata {
+                    chats_to_join = self.get_chats_to_join(metadata);
                 }
-
-                // Process message, determine if we should reply
-                let pop_res = graph_updates.pop_message();
-                if let Some(message) = &pop_res {
+                // Process new messages, determine if we should reply
+                if let Some(message) = &pop_message {
                     messages_to_send = self.get_messages_to_send(message);
                 }
                 // If no messages left, stop
                 // TODO should we only break if all three channels have no messages left?
-                if matches!(&pop_res, None) && matches!(&pop_invite, None) && matches!(&pop_update, None) {
+                if matches!(&pop_message, None) && matches!(&pop_invite, None) && matches!(&pop_metadata, None) {
                     break;
                 }
             }
@@ -130,22 +127,7 @@ impl Chatbot {
                 thread::sleep(Duration::new(0, 500000000));
 
                 if let Ok(spider_response) = spider {
-                    println!("Actually joined chat: {:?}", spider_response);
-                    // Send welcome message
-                    // TODO move to invite_accept
-/*                     channel
-                        .chat()
-                        .send_chat_message(
-                            &chat.ship_name,
-                            &chat.chat_name,
-                            &Message::new().add_text(
-                                "Urbit Alpha online.\n
-                                Type `c <trading_pair> <timeframe>` to get the corresponding chart.\n
-                                You can look up any trading pair and timeframe supported by TradingView.\n
-                                Example: `c ethusd 4h`",
-                            ),
-                        )
-                        .ok(); */
+                    println!("Actually joined chat {}", chat.chat_name);
                 }
             }
 
@@ -165,6 +147,7 @@ impl Chatbot {
         }
     }
 
+    // Returns the bot's reply to a message if the message is an Urbit Alpha command.
     fn get_messages_to_send(&self, message: &str) -> Vec<MessagePayload> {
         let mut messages_to_send = vec![];
         // Parse it to json
@@ -174,7 +157,6 @@ impl Chatbot {
             // Otherwise, parse json to a `Node`
             if let Ok(node) = Node::from_graph_update_json(&json) {
                 // If the message is posted by the Chatbot ship, ignore
-                // if node.author == self.ship.ship_name
                 if node.author == self.ship.ship_name {
                     return messages_to_send;
                 }
@@ -189,7 +171,6 @@ impl Chatbot {
                 // If the Chatbot intends to respond to the provided message
                 if let Some(message) = (self.respond_to_message)(authored_message) {
                     println!("Replied to message.");
-                    // messages_to_send.push(message);
                     messages_to_send.push(MessagePayload {
                         message: message,
                         ship_chat: origin_ship_chat,
@@ -202,18 +183,7 @@ impl Chatbot {
         messages_to_send
     }
    
-    pub fn build_invite_accept_json(&self, ship: String, name: String) -> JsonValue {
-        let mut poke_data = JsonValue::new_object();
-        poke_data["join"] = JsonValue::new_object();
-        poke_data["join"]["resource"] = JsonValue::new_object();
-        poke_data["join"]["resource"]["ship"] = JsonValue::String(format!("~{}", ship.clone()));
-        poke_data["join"]["resource"]["name"] = JsonValue::String(name.clone().into());
-        poke_data["join"]["ship"] = JsonValue::String(format!("~{}", ship.clone()));
-        poke_data["join"]["app"] = JsonValue::String("groups".to_string());
-        poke_data["join"]["autojoin"] = JsonValue::Boolean(true);
-        poke_data["join"]["shareContact"] = JsonValue::Boolean(true);
-        poke_data
-    }
+
 
     // Accept an invite from a third party ship/chat
     // Return Ok(true) if invite was accepted
@@ -234,9 +204,22 @@ impl Chatbot {
         );
         thread::sleep(Duration::new(0, 500000000));
         match poke {
-            Ok(r) => Ok(true),
+            Ok(_) => Ok(true),
             Err(e) => Err(e)
         }
+    }
+
+    pub fn build_invite_accept_json(&self, ship: String, name: String) -> JsonValue {
+        let mut poke_data = JsonValue::new_object();
+        poke_data["join"] = JsonValue::new_object();
+        poke_data["join"]["resource"] = JsonValue::new_object();
+        poke_data["join"]["resource"]["ship"] = JsonValue::String(format!("~{}", ship.clone()));
+        poke_data["join"]["resource"]["name"] = JsonValue::String(name.clone().into());
+        poke_data["join"]["ship"] = JsonValue::String(format!("~{}", ship.clone()));
+        poke_data["join"]["app"] = JsonValue::String("groups".to_string());
+        poke_data["join"]["autojoin"] = JsonValue::Boolean(true);
+        poke_data["join"]["shareContact"] = JsonValue::Boolean(true);
+        poke_data
     }
 
     // Assembles list of chats to join.
