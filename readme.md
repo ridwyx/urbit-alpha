@@ -26,13 +26,14 @@ Current phase
 - [x] Help menu
 - [x] Helpful errors
 - [x] Add welcome message (this means listening for invites to groups & joining channels)
+- [x] Clean up the code
 
 Next phase
 
-- [ ] Improve the TradingView screenshot format (dimensions, zoom) to better fit the chat UI
-- [ ] Clean up the code
 - [ ] Add tests (?)
 - [ ] Accept payments
+- [ ] Build out premium features (?)
+- [ ] Optimize bot reply time – currently takes up to 10 sec
 
 Conceptual
 
