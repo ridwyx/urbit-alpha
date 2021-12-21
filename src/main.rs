@@ -322,6 +322,7 @@ fn respond_to_message(authored_message: bot::AuthoredMessage) -> Option<bot::Mes
         println!("Parsing command.");
         let timeframe: String = parse_timeframe(words[2].to_string());
         let url: String = format!("https://www.tradingview.com/widgetembed/?symbol={}&interval={}&theme=dark&style=1&hidetoptoolbar=1&symboledit=1&saveimage=1&withdateranges=1", words[1], timeframe);
+        println!("Getting screenshot from {}", url);
         let shot = screenshot_tab(&url, width, height);
         println!("Got TradingView screenshot, uploading to S3.");
         match shot {
