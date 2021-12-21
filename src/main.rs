@@ -7,6 +7,7 @@ use headless_chrome::{
     Browser,
 };
 use std::env;
+use time::{Instant, Duration};
 
 use s3::bucket::Bucket;
 use s3::creds::Credentials;
@@ -255,9 +256,6 @@ fn screenshot_tab(url: &str, width: u16, height: u16) -> Result<Vec<u8>, failure
     tab.wait_for_element(".chart-gui-wrapper > canvas")?;
     let legend = tab.wait_for_element("[data-name='legend-series-item']")?;
 
-    let sleep_time = time::Duration::from_millis(2000);
-    thread::sleep(sleep_time);
-
     let is_available = legend
         .call_js_fn(
             r#"
@@ -294,7 +292,7 @@ fn setup_s3_bucket() -> Bucket {
 
 fn respond_to_message(authored_message: bot::AuthoredMessage) -> Option<bot::Message> {
     dotenv().ok();
-
+    let now = Instant::now(); // initiate timer
     let width: u16 = "1024".parse().unwrap();
     let height: u16 = "800".parse().unwrap();
     let bucket_name: &String = &env::var("S3_BUCKET").unwrap();
@@ -344,7 +342,7 @@ fn respond_to_message(authored_message: bot::AuthoredMessage) -> Option<bot::Mes
                     "https://{}.s3.{}.amazonaws.com/{}",
                     bucket_name, region, filename
                 );
-                println!("Uploaded to S3. Sending URL to chat.");
+                println!("Uploaded to S3. Sending URL to chat. Took {} seconds to process command.", now.elapsed().as_secs());
 
                 return Some(bot::Message::new().add_url(file_location.as_str()));
             }
