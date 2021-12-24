@@ -7,7 +7,7 @@ use headless_chrome::{
     Browser,
 };
 use std::env;
-use time::{Instant, Duration};
+use time::Instant;
 
 use s3::bucket::Bucket;
 use s3::creds::Credentials;

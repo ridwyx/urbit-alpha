@@ -1,7 +1,7 @@
 use json::JsonValue;
 use std::thread;
 use std::time::Duration;
-use urbit_http_api::{default_cli_ship_interface_setup, Node, NodeContents, ShipInterface, Channel};
+use urbit_http_api::{default_cli_ship_interface_setup, Node, NodeContents, ShipInterface};
 pub use urbit_http_api::{AuthoredMessage, Message};
 
 pub struct ShipChat {
@@ -112,11 +112,7 @@ impl Chatbot {
             // Join newly added chats
             for chat in chats_to_join.iter() {
                 println!("Attempting to join {} {}", chat.ship_name, chat.chat_name);
-                let json_string = format!(
-                    "{{\"join\":{{\"resource\":{{\"ship\":\"{ship}\",\"name\":\"{chat}\"}},\"ship\":\"{ship}\"}}}}",
-                    ship = chat.ship_name, chat = chat.chat_name
-                );
-                let spider_data = json::parse(&json_string).ok().unwrap();
+                let spider_data = self.build_chat_join_json(chat.ship_name.clone(), chat.chat_name.clone());
                 let spider = channel.spider(
                     "landscape",
                     "json",
@@ -126,7 +122,7 @@ impl Chatbot {
                 thread::sleep(Duration::new(0, 500000000));
 
                 if let Ok(spider_response) = spider {
-                    println!("Actually joined chat {}", chat.chat_name);
+                    println!("Actually joined chat {} on ship {}", chat.chat_name, chat.ship_name);
                 }
             }
 
@@ -146,7 +142,7 @@ impl Chatbot {
         }
     }
 
-    // Returns the bot's reply to a message if the message is an Urbit Alpha command.
+    // Returns the bot's reply to a message if the message is a command.
     fn get_messages_to_send(&self, message: &str) -> Vec<MessagePayload> {
         let mut messages_to_send = vec![];
         // Parse it to json
@@ -183,7 +179,6 @@ impl Chatbot {
     }
    
 
-
     // Accept an invite from a third party ship/chat
     // Return Ok(true) if invite was accepted
     // Return Ok(false) if we got a message from invite-store that wasn't necessarily the invite (this happens sometimes)
@@ -209,16 +204,27 @@ impl Chatbot {
     }
 
     pub fn build_invite_accept_json(&self, ship: String, name: String) -> JsonValue {
-        let mut poke_data = JsonValue::new_object();
-        poke_data["join"] = JsonValue::new_object();
-        poke_data["join"]["resource"] = JsonValue::new_object();
-        poke_data["join"]["resource"]["ship"] = JsonValue::String(format!("~{}", ship.clone()));
-        poke_data["join"]["resource"]["name"] = JsonValue::String(name.clone().into());
-        poke_data["join"]["ship"] = JsonValue::String(format!("~{}", ship.clone()));
-        poke_data["join"]["app"] = JsonValue::String("groups".to_string());
-        poke_data["join"]["autojoin"] = JsonValue::Boolean(true);
-        poke_data["join"]["shareContact"] = JsonValue::Boolean(true);
-        poke_data
+        let mut json_object = JsonValue::new_object();
+        json_object["join"] = JsonValue::new_object();
+        json_object["join"]["resource"] = JsonValue::new_object();
+        json_object["join"]["resource"]["ship"] = JsonValue::String(format!("~{}", ship.clone()));
+        json_object["join"]["resource"]["name"] = JsonValue::String(name.clone().into());
+        json_object["join"]["ship"] = JsonValue::String(format!("~{}", ship.clone()));
+        json_object["join"]["app"] = JsonValue::String("groups".to_string());
+        json_object["join"]["autojoin"] = JsonValue::Boolean(true);
+        json_object["join"]["shareContact"] = JsonValue::Boolean(true);
+        json_object
+    }
+
+    pub fn build_chat_join_json(&self, ship: String, chat: String) -> JsonValue {
+        let mut json_object = JsonValue::new_object();
+        json_object["join"] = JsonValue::new_object();
+        json_object["join"] = JsonValue::new_object();
+        json_object["join"]["resource"] = JsonValue::new_object();
+        json_object["join"]["resource"]["ship"] = JsonValue::String(ship.clone().into());
+        json_object["join"]["resource"]["name"] = JsonValue::String(chat.clone().into());
+        json_object["join"]["ship"] = JsonValue::String(ship.clone().into());
+        json_object
     }
 
     // Assembles list of chats to join.
