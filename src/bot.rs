@@ -61,7 +61,6 @@ impl Chatbot {
         let channel = &mut self.ship.create_channel().ok()?;
         let metadata_channel = &mut self.ship.create_channel().ok()?;
         let invite_channel = &mut self.ship.create_channel().ok()?;
-        let poke_channel = &mut self.ship.create_channel().ok()?;
 
         channel.create_new_subscription("graph-store", "/updates").ok()?;
         metadata_channel.create_new_subscription("metadata-store", "/all").ok()?;
@@ -88,7 +87,7 @@ impl Chatbot {
                 let pop_message = graph_updates.pop_message();
                 // Process invitations to new groups
                 if let Some(invite) = &pop_invite {
-                    let invite_result = self.invite_accept(poke_channel, invite);
+                    let invite_result = self.invite_accept(invite);
                     match invite_result {
                         Ok(true) => println!("Successfully accepted invite."),
                         Ok(false) => (), // Ignore when invite-store sends a message that confirms we accepted the invite
@@ -188,12 +187,12 @@ impl Chatbot {
     // Accept an invite from a third party ship/chat
     // Return Ok(true) if invite was accepted
     // Return Ok(false) if we got a message from invite-store that wasn't necessarily the invite (this happens sometimes)
-    pub fn invite_accept(&self, poke_channel: &mut Channel, invite_message: &str) -> Result<bool, urbit_http_api::UrbitAPIError> {
+    pub fn invite_accept(&self, invite_message: &str) -> Result<bool, urbit_http_api::UrbitAPIError> {
         let invite_message_json = json::parse(invite_message).unwrap();
         if invite_message_json["invite-update"]["invite"].is_null() {
             return Ok(false);
         }
-
+        let poke_channel = &mut self.ship.create_channel().unwrap();
         let ship = invite_message_json["invite-update"]["invite"]["invite"]["resource"]["ship"].clone().to_string();
         let name = invite_message_json["invite-update"]["invite"]["invite"]["resource"]["name"].clone().to_string();
         println!("Got an invite from group {} on ship {}. Raw JSON: {}", name, ship, invite_message_json);
