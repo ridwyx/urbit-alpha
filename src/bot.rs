@@ -61,16 +61,26 @@ impl Chatbot {
         let channel = &mut self.ship.create_channel().ok()?;
         let metadata_channel = &mut self.ship.create_channel().ok()?;
         let invite_channel = &mut self.ship.create_channel().ok()?;
+        let settings_channel = &mut self.ship.create_channel().ok()?;
+        let btc_channel = &mut self.ship.create_channel().ok()?;
+
+        // make channell
+        // init wallet? oh duh just use /all and btc-wallet
+        // get tx -hist hopefully
+        // process payment hist
 
         channel.create_new_subscription("graph-store", "/updates").ok()?;
         metadata_channel.create_new_subscription("metadata-store", "/all").ok()?;
         invite_channel.create_new_subscription("invite-store", "/updates").ok()?;
+        settings_channel.create_new_subscription("settings-store", "/all").ok()?;
+        btc_channel.create_new_subscription("btc-wallet", "/all").ok()?;
 
         // Infinitely watch for new updates
         loop {
             channel.parse_event_messages();
             metadata_channel.parse_event_messages();
             invite_channel.parse_event_messages();
+            btc_channel.parse_event_messages();
 
             let mut messages_to_send = vec![];
             let mut chats_to_join: Vec<ShipChat> = Vec::new();
@@ -78,6 +88,7 @@ impl Chatbot {
             let graph_updates = &mut channel.find_subscription("graph-store", "/updates")?;
             let invite_updates = &mut invite_channel.find_subscription("invite-store", "/updates")?;
             let metadata_updates = &mut metadata_channel.find_subscription("metadata-store", "/all")?;
+            let btc_updates = &mut btc_channel.find_subscription("btc-wallet", "/all")?;
 
             // Read all of the current SSE messages to find if any are for the chat
             // we are looking for.
@@ -85,6 +96,9 @@ impl Chatbot {
                 let pop_invite = invite_updates.pop_message();
                 let pop_metadata = metadata_updates.pop_message();
                 let pop_message = graph_updates.pop_message();
+                let btc_message = btc_updates.pop_message();
+
+                println!("{:?}", btc_message);
                 // Process invitations to new groups
                 if let Some(invite) = &pop_invite {
                     let invite_result = self.invite_accept(invite);
@@ -287,4 +301,26 @@ impl Chatbot {
         }
         false
     }
+}
+
+
+#[cfg(test)]
+mod tests {
+    // Note this useful idiom: importing names from outer (for mod tests) scope.
+    use super::*;
+
+    fn respond_to_message(authored_message: AuthoredMessage) -> Option<Message> {
+        None
+    }
+
+    #[test]
+    fn test_build_invite_accept_json() {
+        let shipchats: Vec<ShipChat> = Vec::new();
+        let bot = Chatbot::new_with_local_config(respond_to_message, shipchats);
+        let mut jsonObj = bot.build_invite_accept_json("dozzod-dozzod".to_string(), "groupname".to_string());
+        // JSON for invite accept needs ~ in front of ship name
+        assert_eq!(Some(jsonObj["join"]["resource"]["ship"].as_str().unwrap().get(0..1)), "~");
+        // assert_eq!(jsonObj["join"]["ship"].as_str().unwrap().get(0..1), "~");
+    }
+
 }

@@ -352,7 +352,7 @@ fn respond_to_message(authored_message: bot::AuthoredMessage) -> Option<bot::Mes
             }
         }
     }
-
+ 
     None
 }
 
